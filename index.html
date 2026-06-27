@@ -1,0 +1,636 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>Daycare Tax Tracker</title>
+  <script>
+    const manifest = {
+      name: "Daycare Tax",
+      short_name: "TaxDaycare",
+      start_url: ".",
+      display: "standalone",
+      background_color: "#ffffff",
+      theme_color: "#4CAF50",
+      icons: [{
+        src: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='%234CAF50'/%3E%3Ctext x='50' y='68' font-size='50' text-anchor='middle' fill='white' font-family='Arial'%3E🧾%3C/text%3E%3C/svg%3E",
+        sizes: "100x100",
+        type: "image/svg+xml"
+      }]
+    };
+    const blob = new Blob([JSON.stringify(manifest)], {type: 'application/json'});
+    const manifestURL = URL.createObjectURL(blob);
+    document.querySelector('link[rel="manifest"]')?.remove();
+    const link = document.createElement('link');
+    link.rel = 'manifest';
+    link.href = manifestURL;
+    document.head.appendChild(link);
+  </script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #f5f5f5;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .app-container {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      max-width: 500px;
+      margin: 0 auto;
+      width: 100%;
+      background: #fff;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+    }
+    header {
+      background: #4CAF50;
+      color: white;
+      padding: 15px 20px;
+      font-size: 1.2em;
+      font-weight: bold;
+      text-align: center;
+    }
+    main {
+      flex: 1;
+      overflow-y: auto;
+      padding: 15px;
+      -webkit-overflow-scrolling: touch;
+    }
+    nav {
+      display: flex;
+      border-top: 1px solid #ddd;
+      background: #fafafa;
+    }
+    nav button {
+      flex: 1;
+      padding: 12px 5px;
+      background: none;
+      border: none;
+      font-size: 0.9em;
+      color: #666;
+      cursor: pointer;
+      transition: 0.2s;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+    }
+    nav button.active { color: #4CAF50; font-weight: 600; }
+    .page { display: none; }
+    .page.active { display: block; }
+    .card {
+      background: #fff;
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 12px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    }
+    input, select, button {
+      width: 100%;
+      padding: 12px;
+      margin: 6px 0;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      font-size: 16px;
+    }
+    button {
+      background: #4CAF50;
+      color: white;
+      font-weight: 600;
+      border: none;
+      cursor: pointer;
+    }
+    button:disabled { background: #aaa; }
+    .row { display: flex; gap: 8px; align-items: center; }
+    .col { flex: 1; }
+    .image-preview { max-width: 100%; border-radius: 8px; margin: 10px 0; }
+    .expense-line { display: flex; justify-content: space-between; margin: 8px 0; }
+    .total { font-size: 1.2em; font-weight: bold; margin-top: 15px; }
+    .login-container { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; }
+    .login-container .card { width: 100%; max-width: 320px; }
+    .error { color: #d32f2f; font-size: 0.9em; margin-top: 5px; }
+
+    /* Itemized table */
+    .item-table { width: 100%; border-collapse: collapse; margin: 10px 0; font-size: 0.9em; }
+    .item-table th { background: #f0f0f0; padding: 8px 6px; text-align: left; font-size: 0.85em; }
+    .item-table td { padding: 8px 6px; border-bottom: 1px solid #eee; vertical-align: middle; }
+    .item-table tr.exempt { opacity: 0.4; }
+    .item-table tr.exempt td { text-decoration: line-through; }
+    .toggle-btn {
+      width: auto; padding: 6px 12px; font-size: 0.8em;
+      border-radius: 15px; margin: 0; background: #4CAF50;
+    }
+    .toggle-btn.exempt { background: #f44336; }
+    .item-total-row { font-weight: bold; background: #f9f9f9; }
+    .ai-status { font-size: 0.85em; color: #666; margin: 8px 0; text-align: center; }
+    .spinner {
+      display: inline-block; width: 20px; height: 20px;
+      border: 3px solid #ddd; border-top-color: #4CAF50;
+      border-radius: 50%; animation: spin 0.8s linear infinite;
+      vertical-align: middle; margin-right: 8px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+  <div class="app-container" id="app">
+    <!-- Login screen -->
+    <div id="loginPage" class="page active">
+      <div class="login-container">
+        <div class="card">
+          <h2 style="text-align:center;">Daycare Tax</h2>
+          <p style="text-align:center;margin:15px 0;">Sign in to sync receipts</p>
+          <input type="email" id="email" placeholder="Email" autocomplete="email">
+          <input type="password" id="password" placeholder="Password" autocomplete="current-password">
+          <button id="loginBtn">Log In</button>
+          <button id="signupBtn" style="background:#2196F3;">Create Account</button>
+          <div id="authError" class="error"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Main app -->
+    <div id="mainApp" style="display:none; flex-direction: column; height: 100%;">
+      <header>🧾 Daycare Tax Tracker</header>
+      <main>
+        <!-- Scan Page -->
+        <div id="scanPage" class="page active">
+          <div class="card">
+            <h3>Scan a Receipt</h3>
+            <p style="font-size:0.9em;color:#666;">Take a photo or choose a file</p>
+            <input type="file" id="fileInput" accept="image/*" capture="environment" style="display:none;">
+            <div class="row">
+              <button onclick="document.getElementById('fileInput').click()">📷 Camera / Gallery</button>
+            </div>
+            <div id="previewContainer" style="display:none;">
+              <img id="preview" class="image-preview">
+              <div id="aiStatus" class="ai-status"></div>
+            </div>
+            <!-- Itemized table (filled by AI) -->
+            <div id="itemizedSection" style="display:none;">
+              <h4>Items extracted by AI</h4>
+              <p style="font-size:0.8em;color:#666;">Tap a row to mark it as non‑daycare (excluded from total)</p>
+              <table class="item-table" id="itemTable">
+                <thead>
+                  <tr><th>Item</th><th>Qty</th><th>Price</th><th></th></tr>
+                </thead>
+                <tbody id="itemTableBody"></tbody>
+                <tfoot>
+                  <tr class="item-total-row">
+                    <td colspan="2">Taxable subtotal</td>
+                    <td id="itemSubtotal">$0.00</td>
+                    <td></td>
+                  </tr>
+                </tfoot>
+              </table>
+              <input id="vendorName" placeholder="Vendor (e.g. Costco)">
+              <input id="receiptDate" type="date">
+              <select id="category">
+                <option value="">Select category</option>
+                <option>Food & groceries</option>
+                <option>Supplies (crafts, toys, cleaning)</option>
+                <option>Advertising</option>
+                <option>Insurance</option>
+                <option>Maintenance & repairs</option>
+                <option>Office expenses</option>
+                <option>Utilities (business portion)</option>
+                <option>Property taxes (business portion)</option>
+                <option>Mortgage interest (business portion)</option>
+                <option>Rent (business portion)</option>
+                <option>Other business expenses</option>
+              </select>
+              <button id="saveReceiptBtn">Save Receipt</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Receipts List Page -->
+        <div id="listPage" class="page">
+          <h3>All Receipts</h3>
+          <div id="receiptsList">Loading...</div>
+        </div>
+
+        <!-- Tax Summary Page -->
+        <div id="summaryPage" class="page">
+          <div class="card">
+            <h3>Tax Year Summary (T2125)</h3>
+            <div id="taxLines"></div>
+            <div class="total" id="totalExpenses">Total: $0.00</div>
+            <button id="exportPdfBtn">📄 Export PDF Report</button>
+          </div>
+          <div class="card">
+            <h4>Business-Use-of-Home (optional)</h4>
+            <label>Business use % <input id="homePercent" type="number" value="0" min="0" max="100"></label>
+            <div class="row">
+              <input id="homeRent" type="number" step="0.01" placeholder="Annual rent" class="col">
+              <input id="homeUtilities" type="number" step="0.01" placeholder="Utilities" class="col">
+            </div>
+            <div class="row">
+              <input id="homePropTax" type="number" step="0.01" placeholder="Property tax" class="col">
+              <input id="homeMortgage" type="number" step="0.01" placeholder="Mortgage interest" class="col">
+            </div>
+            <input id="homeMaintenance" type="number" step="0.01" placeholder="Maintenance/repairs">
+            <button id="saveHomeSettings">Save Home Settings</button>
+          </div>
+        </div>
+
+        <!-- Settings Page -->
+        <div id="settingsPage" class="page">
+          <div class="card">
+            <h3>Account</h3>
+            <p id="userEmail"></p>
+            <button id="logoutBtn" style="background:#f44336;">Log Out</button>
+          </div>
+        </div>
+      </main>
+
+      <nav>
+        <button id="navScan" class="active" data-page="scanPage">📸 Scan</button>
+        <button id="navList" data-page="listPage">📋 Receipts</button>
+        <button id="navSummary" data-page="summaryPage">📊 Tax</button>
+        <button id="navSettings" data-page="settingsPage">⚙️ Settings</button>
+      </nav>
+    </div>
+  </div>
+
+  <script type="importmap">
+    {
+      "imports": {
+        "firebase/app": "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js",
+        "firebase/auth": "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js",
+        "firebase/firestore": "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js",
+        "firebase/storage": "https://www.gstatic.com/firebasejs/10.12.0/firebase-storage.js"
+      }
+    }
+  </script>
+  <script type="module">
+    import { initializeApp } from 'firebase/app';
+    import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, signOut } from 'firebase/auth';
+    import { getFirestore, collection, addDoc, query, where, orderBy, onSnapshot, doc, setDoc, getDoc } from 'firebase/firestore';
+    import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+
+    // ========== YOUR KEYS (already inserted) ==========
+    const firebaseConfig = {
+      apiKey: "AIzaSyA2cWoeS_7fqu6Efvyns81-HFOfxBSlSBE",
+      authDomain: "tax-filling-app.firebaseapp.com",
+      projectId: "tax-filling-app",
+      storageBucket: "tax-filling-app.firebasestorage.app",
+      messagingSenderId: "955905005135",
+      appId: "1:955905005135:web:164f865d4441285d0b7c3a",
+      measurementId: "G-0LRKFHGD4Z"
+    };
+    const GEMINI_API_KEY = "AQ.Ab8RN6LVJhXjlWiNe2IIDzpIu1yyxBxfZu9pdJpvduv3fAptPA";
+    // ==================================================
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+    const storage = getStorage(app);
+
+    let currentUser = null;
+    let receipts = [];
+    let homeSettings = { percent: 0, rent: 0, utilities: 0, propTax: 0, mortgage: 0, maintenance: 0 };
+    let scannedItems = []; // [{name, qty, unitPrice, totalPrice, exempt: false}]
+
+    // ---------- UI Elements ----------
+    const loginPage = document.getElementById('loginPage');
+    const mainApp = document.getElementById('mainApp');
+    const authError = document.getElementById('authError');
+    const userEmailSpan = document.getElementById('userEmail');
+    const pages = document.querySelectorAll('.page');
+    const navButtons = document.querySelectorAll('nav button');
+
+    function showPage(pageId) {
+      pages.forEach(p => p.classList.remove('active'));
+      document.getElementById(pageId)?.classList.add('active');
+      navButtons.forEach(b => b.classList.remove('active'));
+      document.querySelector(`[data-page="${pageId}"]`)?.classList.add('active');
+    }
+    navButtons.forEach(btn => btn.addEventListener('click', () => showPage(btn.dataset.page)));
+
+    // ---------- Auth ----------
+    document.getElementById('loginBtn').addEventListener('click', async () => {
+      try { await signInWithEmailAndPassword(auth, document.getElementById('email').value, document.getElementById('password').value); }
+      catch (e) { authError.textContent = e.message; }
+    });
+    document.getElementById('signupBtn').addEventListener('click', async () => {
+      try { await createUserWithEmailAndPassword(auth, document.getElementById('email').value, document.getElementById('password').value); }
+      catch (e) { authError.textContent = e.message; }
+    });
+    document.getElementById('logoutBtn').addEventListener('click', () => signOut(auth));
+
+    onAuthStateChanged(auth, user => {
+      currentUser = user;
+      if (user) {
+        loginPage.style.display = 'none';
+        mainApp.style.display = 'flex';
+        userEmailSpan.textContent = user.email;
+        loadReceipts();
+        loadHomeSettings();
+      } else {
+        loginPage.style.display = 'flex';
+        mainApp.style.display = 'none';
+      }
+    });
+
+    // ---------- Firestore ----------
+    function loadReceipts() {
+      if (!currentUser) return;
+      const q = query(collection(db, 'receipts'), where('userId', '==', currentUser.uid), orderBy('createdAt', 'desc'));
+      onSnapshot(q, snapshot => {
+        receipts = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+        renderReceiptsList();
+        renderTaxSummary();
+      });
+    }
+
+    async function loadHomeSettings() {
+      if (!currentUser) return;
+      const snap = await getDoc(doc(db, 'settings', currentUser.uid));
+      if (snap.exists()) {
+        homeSettings = snap.data();
+        document.getElementById('homePercent').value = homeSettings.percent || 0;
+        document.getElementById('homeRent').value = homeSettings.rent || 0;
+        document.getElementById('homeUtilities').value = homeSettings.utilities || 0;
+        document.getElementById('homePropTax').value = homeSettings.propTax || 0;
+        document.getElementById('homeMortgage').value = homeSettings.mortgage || 0;
+        document.getElementById('homeMaintenance').value = homeSettings.maintenance || 0;
+      }
+    }
+
+    async function saveHomeSettings() {
+      homeSettings = {
+        percent: +document.getElementById('homePercent').value,
+        rent: +document.getElementById('homeRent').value,
+        utilities: +document.getElementById('homeUtilities').value,
+        propTax: +document.getElementById('homePropTax').value,
+        mortgage: +document.getElementById('homeMortgage').value,
+        maintenance: +document.getElementById('homeMaintenance').value,
+      };
+      if (currentUser) { await setDoc(doc(db, 'settings', currentUser.uid), homeSettings); alert('Saved!'); renderTaxSummary(); }
+    }
+    document.getElementById('saveHomeSettings').addEventListener('click', saveHomeSettings);
+
+    function renderReceiptsList() {
+      const c = document.getElementById('receiptsList');
+      if (receipts.length === 0) { c.innerHTML = '<p>No receipts yet. Scan one!</p>'; return; }
+      c.innerHTML = receipts.map(r => {
+        const taxable = r.taxableAmount ?? r.amount ?? 0;
+        const itemsHtml = r.items?.length ? `<div style="font-size:0.75em;color:#888;margin-top:4px;">${r.items.filter(i=>!i.exempt).map(i=>i.name).join(', ') || 'No items'}</div>` : '';
+        return `
+          <div class="card" style="padding:12px;">
+            <div style="display:flex;justify-content:space-between;">
+              <strong>${r.vendor||'Unknown'}</strong><span>$${taxable.toFixed(2)}</span>
+            </div>
+            <div style="font-size:0.8em;color:#666;">${r.date} – ${r.category||'Uncategorized'}</div>
+            ${itemsHtml}
+            ${r.imageUrl?`<img src="${r.imageUrl}" class="image-preview" style="max-height:80px;">`:''}
+          </div>`;
+      }).join('');
+    }
+
+    // ---------- T2125 ----------
+    const CATEGORY_LINES = {
+      'Food & groceries': '8523', 'Supplies (crafts, toys, cleaning)': '8523',
+      'Advertising': '8521', 'Insurance': '8690', 'Maintenance & repairs': '8710',
+      'Office expenses': '8871', 'Utilities (business portion)': '9180',
+      'Property taxes (business portion)': '9200', 'Mortgage interest (business portion)': '9220',
+      'Rent (business portion)': '9220', 'Other business expenses': '9270'
+    };
+
+    function calculateTaxLines() {
+      const lines = {};
+      receipts.forEach(r => {
+        const line = CATEGORY_LINES[r.category] || '9270';
+        const taxable = r.taxableAmount ?? r.amount ?? 0;
+        lines[line] = (lines[line] || 0) + taxable;
+      });
+      if (homeSettings.percent > 0) {
+        const p = homeSettings.percent / 100;
+        lines['9220'] = (lines['9220']||0) + (homeSettings.rent||0)*p + (homeSettings.mortgage||0)*p;
+        lines['9180'] = (lines['9180']||0) + (homeSettings.utilities||0)*p;
+        lines['9200'] = (lines['9200']||0) + (homeSettings.propTax||0)*p;
+        lines['8710'] = (lines['8710']||0) + (homeSettings.maintenance||0)*p;
+      }
+      return lines;
+    }
+
+    function renderTaxSummary() {
+      const lines = calculateTaxLines();
+      const total = Object.values(lines).reduce((a,b)=>a+b,0);
+      const names = {'8521':'Advertising','8523':'Supplies','8690':'Insurance','8710':'Maintenance','8871':'Office','9180':'Utilities (business)','9200':'Property taxes (business)','9220':'Rent/Mortgage interest','9270':'Other'};
+      document.getElementById('taxLines').innerHTML = Object.keys(lines).map(l=>`
+        <div class="expense-line"><span>Line ${l} – ${names[l]||l}</span><span>$${lines[l].toFixed(2)}</span></div>`).join('');
+      document.getElementById('totalExpenses').textContent = `Total Business Expenses: $${total.toFixed(2)}`;
+    }
+
+    // ---------- PDF Export ----------
+    async function exportPDF() {
+      const { default: jsPDF } = await import('https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.es.min.js');
+      const doc = new jsPDF(); const lines = calculateTaxLines();
+      const total = Object.values(lines).reduce((a,b)=>a+b,0);
+      doc.setFontSize(16); doc.text('Daycare Business Expense Report (T2125)',20,20);
+      doc.setFontSize(12); let y=35;
+      const names={'8521':'Advertising','8523':'Supplies','8690':'Insurance','8710':'Maintenance','8871':'Office','9180':'Utilities','9200':'Property taxes','9220':'Rent/Mortgage','9270':'Other'};
+      Object.keys(lines).forEach(l=>{ doc.text(`Line ${l} – ${names[l]||l}: $${lines[l].toFixed(2)}`,20,y); y+=7; });
+      doc.text(`Total Business Expenses: $${total.toFixed(2)}`,20,y+5);
+      doc.save('DaycareTaxReport.pdf');
+    }
+    document.getElementById('exportPdfBtn').addEventListener('click', exportPDF);
+
+    // ========== GEMINI AI ITEMIZED SCANNING ==========
+    const fileInput = document.getElementById('fileInput');
+    const previewImg = document.getElementById('preview');
+    const previewContainer = document.getElementById('previewContainer');
+    const aiStatus = document.getElementById('aiStatus');
+    const itemizedSection = document.getElementById('itemizedSection');
+    const itemTableBody = document.getElementById('itemTableBody');
+    const itemSubtotal = document.getElementById('itemSubtotal');
+
+    fileInput.addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      // Show preview
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        previewImg.src = ev.target.result;
+        previewContainer.style.display = 'block';
+        itemizedSection.style.display = 'none';
+        scannedItems = [];
+      };
+      reader.readAsDataURL(file);
+
+      aiStatus.innerHTML = '<span class="spinner"></span> AI is reading your receipt…';
+
+      try {
+        // Convert image to base64 (without data URI prefix)
+        const base64 = await new Promise((resolve, reject) => {
+          const r = new FileReader();
+          r.onload = () => resolve(r.result.split(',')[1]);
+          r.onerror = reject;
+          r.readAsDataURL(file);
+        });
+
+        // Call Gemini Vision API
+        const prompt = `You are a receipt scanner. Analyze this receipt image and extract EVERY line item purchased.
+
+Return ONLY a valid JSON object with this exact structure — no extra text, no markdown, just the JSON:
+
+{
+  "vendor": "Store Name",
+  "date": "YYYY-MM-DD",
+  "items": [
+    {"name": "Item name", "qty": 1, "unitPrice": 0.00, "totalPrice": 0.00}
+  ]
+}
+
+Rules:
+- For each item, "totalPrice" is the line total (qty × unit price, or the amount shown on that line).
+- If quantity is not shown, set qty to 1 and unitPrice equal to totalPrice.
+- Include ALL items, even tax and fees. The user will mark non-deductible ones later.
+- If you cannot read something, use your best guess.
+- Date format must be YYYY-MM-DD.`;
+
+        const response = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              contents: [{
+                parts: [
+                  { inlineData: { mimeType: file.type || 'image/jpeg', data: base64 } },
+                  { text: prompt }
+                ]
+              }]
+            })
+          }
+        );
+
+        if (!response.ok) {
+          const errText = await response.text();
+          throw new Error(`API error ${response.status}: ${errText}`);
+        }
+
+        const data = await response.json();
+        const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+
+        // Parse the JSON from the response (strip any markdown wrappers)
+        let cleanJson = rawText.replace(/```json\s*|```/g, '').trim();
+        const parsed = JSON.parse(cleanJson);
+
+        // Populate scannedItems
+        scannedItems = (parsed.items || []).map(item => ({
+          name: item.name || 'Unknown item',
+          qty: item.qty || 1,
+          unitPrice: item.unitPrice || item.totalPrice || 0,
+          totalPrice: item.totalPrice || (item.unitPrice * (item.qty || 1)) || 0,
+          exempt: false
+        }));
+
+        // Fill vendor & date
+        document.getElementById('vendorName').value = parsed.vendor || 'Unknown';
+        document.getElementById('receiptDate').value = parsed.date || new Date().toISOString().slice(0,10);
+
+        renderItemTable();
+        aiStatus.textContent = `Found ${scannedItems.length} items. Tap any row to exclude from daycare total.`;
+        itemizedSection.style.display = 'block';
+
+      } catch (err) {
+        console.error(err);
+        aiStatus.textContent = 'AI failed. Please enter details manually below.';
+        scannedItems = [];
+        itemizedSection.style.display = 'block';
+        renderItemTable();
+      }
+    });
+
+    function renderItemTable() {
+      itemTableBody.innerHTML = scannedItems.map((item, idx) => `
+        <tr class="${item.exempt ? 'exempt' : ''}">
+          <td>${item.name}</td>
+          <td>${item.qty}</td>
+          <td>$${item.totalPrice.toFixed(2)}</td>
+          <td>
+            <button class="toggle-btn ${item.exempt ? 'exempt' : ''}" data-idx="${idx}">
+              ${item.exempt ? 'Exempt' : 'Include'}
+            </button>
+          </td>
+        </tr>
+      `).join('');
+
+      // Attach toggle handlers
+      itemTableBody.querySelectorAll('.toggle-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const idx = parseInt(btn.dataset.idx);
+          scannedItems[idx].exempt = !scannedItems[idx].exempt;
+          renderItemTable();
+          updateSubtotal();
+        });
+      });
+
+      updateSubtotal();
+    }
+
+    function updateSubtotal() {
+      const taxable = scannedItems.filter(i => !i.exempt).reduce((s, i) => s + i.totalPrice, 0);
+      itemSubtotal.textContent = `$${taxable.toFixed(2)}`;
+    }
+
+    // ========== SAVE RECEIPT ==========
+    document.getElementById('saveReceiptBtn').addEventListener('click', async () => {
+      if (!currentUser) return;
+      const vendor = document.getElementById('vendorName').value || 'Unknown';
+      const date = document.getElementById('receiptDate').value || new Date().toISOString().slice(0,10);
+      const category = document.getElementById('category').value;
+      if (!category) { alert('Please select a category'); return; }
+      const imageFile = fileInput.files[0];
+      if (!imageFile) { alert('No image selected'); return; }
+
+      const taxableAmount = scannedItems.filter(i => !i.exempt).reduce((s,i) => s + i.totalPrice, 0);
+      const totalAmount = scannedItems.reduce((s,i) => s + i.totalPrice, 0);
+
+      const docRef = await addDoc(collection(db, 'receipts'), {
+        userId: currentUser.uid,
+        vendor, date, category,
+        amount: totalAmount,
+        taxableAmount,
+        items: scannedItems,
+        imageUrl: '',
+        createdAt: new Date(),
+      });
+
+      const storageRef = ref(storage, `receipt-images/${currentUser.uid}/${docRef.id}.jpg`);
+      await uploadBytes(storageRef, imageFile);
+      const downloadURL = await getDownloadURL(storageRef);
+      await setDoc(doc(db, 'receipts', docRef.id), { imageUrl: downloadURL }, { merge: true });
+
+      alert('Receipt saved!');
+      // Reset
+      fileInput.value = '';
+      previewContainer.style.display = 'none';
+      itemizedSection.style.display = 'none';
+      scannedItems = [];
+      document.getElementById('vendorName').value = '';
+      document.getElementById('receiptDate').value = '';
+      document.getElementById('category').value = '';
+    });
+
+    // Service Worker
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register(URL.createObjectURL(new Blob([`
+          self.addEventListener('fetch', e => {});
+        `], {type: 'application/javascript'})));
+      });
+    }
+  </script>
+</body>
+</html>

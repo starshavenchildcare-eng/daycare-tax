@@ -1,0 +1,1121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Daycare Tax Tracker</title>
+  
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#4CAF50">
+  <link rel="apple-touch-icon" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%234CAF50'/><text y='65' x='15' font-family='sans-serif' font-size='55' fill='white'>🇨🇦</text></svg>">
+  
+  <link id="manifest-placeholder" rel="manifest">
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  
+  <script type="importmap">
+    {
+      "imports": {
+        "firebase/app": "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js",
+        "firebase/auth": "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js",
+        "firebase/firestore": "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js",
+        "firebase/storage": "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js"
+      }
+    }
+  </script>
+
+  <style>
+    :root {
+      --primary: #4CAF50;
+      --primary-dark: #388E3C;
+      --primary-light: #E8F5E9;
+      --accent: #FF9800;
+      --text: #212121;
+      --text-secondary: #757575;
+      --bg: #F5F5F5;
+      --card-bg: #FFFFFF;
+      --border: #E0E0E0;
+      --danger: #F44336;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    body {
+      background-color: #E0E0E0;
+      color: var(--text);
+      display: flex;
+      justify-content: center;
+      min-height: 100vh;
+    }
+
+    /* Mobile Framed Viewport Wrapper */
+    .app-container {
+      width: 100%;
+      max-width: 500px;
+      background-color: var(--bg);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+    }
+
+    header {
+      background-color: var(--primary);
+      color: white;
+      padding: 16px;
+      text-align: center;
+      font-weight: bold;
+      font-size: 1.2rem;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+
+    .main-content {
+      flex: 1;
+      padding: 16px;
+      padding-bottom: 90px;
+      overflow-y: auto;
+    }
+
+    /* Utility Elements */
+    .card {
+      background: var(--card-bg);
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 16px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+      border: 1px solid var(--border);
+    }
+
+    h2 {
+      font-size: 1.1rem;
+      margin-bottom: 12px;
+      color: var(--primary-dark);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .form-group {
+      margin-bottom: 14px;
+    }
+
+    label {
+      display: block;
+      font-size: 0.85rem;
+      font-weight: 600;
+      margin-bottom: 6px;
+      color: var(--text-secondary);
+    }
+
+    input, select, textarea {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-size: 1rem;
+      background-color: #FAFAFA;
+      outline: none;
+      transition: border 0.2s;
+    }
+
+    input:focus, select:focus {
+      border-color: var(--primary);
+      background-color: #FFF;
+    }
+
+    .btn {
+      background-color: var(--primary);
+      color: white;
+      border: none;
+      padding: 12px 20px;
+      border-radius: 8px;
+      font-weight: 600;
+      font-size: 1rem;
+      cursor: pointer;
+      width: 100%;
+      transition: background 0.2s;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .btn:hover, .btn:active {
+      background-color: var(--primary-dark);
+    }
+
+    .btn-secondary {
+      background-color: transparent;
+      color: var(--primary-dark);
+      border: 1px solid var(--primary-dark);
+    }
+
+    .btn-secondary:hover, .btn-secondary:active {
+      background-color: var(--primary-light);
+    }
+
+    .btn-danger {
+      background-color: var(--danger);
+    }
+
+    /* Views Framework */
+    .view {
+      display: none;
+    }
+
+    .view.active {
+      display: block;
+    }
+
+    /* Auth Interface */
+    .auth-container {
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      min-height: 80vh;
+    }
+
+    .auth-toggle {
+      text-align: center;
+      margin-top: 16px;
+      font-size: 0.9rem;
+      color: var(--primary-dark);
+      cursor: pointer;
+    }
+
+    /* Dynamic Item Rows Grid Layout */
+    .item-row {
+      background: #F9F9F9;
+      padding: 12px;
+      border-radius: 8px;
+      margin-bottom: 10px;
+      border-left: 4px solid var(--primary);
+    }
+
+    .item-row.exempt {
+      border-left-color: var(--text-secondary);
+    }
+
+    .item-grid-top {
+      display: grid;
+      grid-template-columns: 2fr 1fr;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+
+    .item-grid-bottom {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .toggle-badge {
+      padding: 6px 12px;
+      border-radius: 20px;
+      font-size: 0.75rem;
+      font-weight: bold;
+      cursor: pointer;
+      border: none;
+    }
+
+    .badge-include {
+      background-color: var(--primary-light);
+      color: var(--primary-dark);
+    }
+
+    .badge-exempt {
+      background-color: #EEEEEE;
+      color: var(--text-secondary);
+    }
+
+    .running-subtotal {
+      text-align: right;
+      font-weight: bold;
+      font-size: 1.1rem;
+      margin-top: 10px;
+      color: var(--primary-dark);
+    }
+
+    /* Receipts View List */
+    .receipt-item {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      border-bottom: 1px solid var(--border);
+      padding: 12px 0;
+    }
+
+    .receipt-item:last-child {
+      border-bottom: none;
+    }
+
+    .receipt-thumb {
+      width: 60px;
+      height: 60px;
+      border-radius: 6px;
+      object-fit: cover;
+      background-color: #EEE;
+    }
+
+    .receipt-details {
+      flex: 1;
+    }
+
+    .receipt-vendor {
+      font-weight: bold;
+      font-size: 1rem;
+    }
+
+    .receipt-meta {
+      font-size: 0.8rem;
+      color: var(--text-secondary);
+      margin-top: 2px;
+    }
+
+    .receipt-items-list {
+      font-size: 0.75rem;
+      color: #555;
+      font-style: italic;
+      margin-top: 4px;
+    }
+
+    .receipt-amount {
+      font-weight: bold;
+      color: var(--primary-dark);
+      text-align: right;
+    }
+
+    /* Summary Table Matrix */
+    .tax-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 12px;
+      font-size: 0.85rem;
+    }
+
+    .tax-table th {
+      background-color: var(--primary);
+      color: white;
+      text-align: left;
+      padding: 8px;
+    }
+
+    .tax-table td {
+      padding: 8px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .tax-table tr.total-row {
+      font-weight: bold;
+      background-color: var(--primary-light);
+    }
+
+    /* Bottom Navigation Matrix */
+    .bottom-nav {
+      position: fixed;
+      bottom: 0;
+      width: 100%;
+      max-width: 500px;
+      background-color: var(--card-bg);
+      display: flex;
+      border-top: 1px solid var(--border);
+      z-index: 100;
+    }
+
+    .nav-item {
+      flex: 1;
+      text-align: center;
+      padding: 10px 0;
+      font-size: 0.75rem;
+      color: var(--text-secondary);
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .nav-item.active {
+      color: var(--primary);
+      font-weight: bold;
+    }
+
+    .nav-item svg {
+      width: 22px;
+      height: 22px;
+      fill: currentColor;
+    }
+
+    /* Loader Modal Screen */
+    .loader-overlay {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(255,255,255,0.8);
+      display: none;
+      justify-content: center;
+      align-items: center;
+      z-index: 1000;
+      font-weight: bold;
+      color: var(--primary-dark);
+    }
+
+    .spinner {
+      border: 4px solid #f3f3f3;
+      border-top: 4px solid var(--primary);
+      border-radius: 50%;
+      width: 30px;
+      height: 30px;
+      animation: spin 1s linear infinite;
+      margin-bottom: 8px;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="app-container">
+    <header id="app-header">Daycare Tax Tracker</header>
+    
+    <div class="main-content">
+      
+      <div id="view-auth" class="view active">
+        <div class="auth-container card">
+          <h2 id="auth-title">Daycare Owner Login</h2>
+          <form id="auth-form" style="margin-top:15px;">
+            <div class="form-group">
+              <label>Email Address</label>
+              <input type="email" id="auth-email" required>
+            </div>
+            <div class="form-group">
+              <label>Password</label>
+              <input type="password" id="auth-password" required>
+            </div>
+            <button type="submit" class="btn" id="auth-btn">Sign In</button>
+          </form>
+          <div class="auth-toggle" id="auth-toggle">New here? Create an account</div>
+        </div>
+      </div>
+
+      <div id="view-scan" class="view">
+        <div class="card">
+          <h2>Capture Receipt</h2>
+          <div class="form-group">
+            <label>Receipt Document Capture</label>
+            <input type="file" id="receipt-file" accept="image/*" capture="environment">
+          </div>
+          <div id="preview-container" style="display:none; margin-bottom:12px; text-align:center;">
+            <img id="receipt-preview" style="max-width:100%; max-height:150px; border-radius:6px; border:1px solid var(--border);">
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>Receipt Metadata</h2>
+          <div class="form-group">
+            <label>Vendor Name</label>
+            <input type="text" id="receipt-vendor" placeholder="e.g., Walmart, Sobeys" required>
+          </div>
+          <div class="form-group">
+            <label>Transaction Date</label>
+            <input type="date" id="receipt-date" required>
+          </div>
+          <div class="form-group">
+            <label>CRA Tax Category (T2125)</label>
+            <select id="receipt-category">
+              <option value="8523|Food & groceries">Food & groceries (Line 8523)</option>
+              <option value="8523|Supplies (crafts, toys, cleaning)">Supplies: crafts, toys, cleaning (Line 8523)</option>
+              <option value="8521|Advertising">Advertising (Line 8521)</option>
+              <option value="8690|Insurance">Insurance (Line 8690)</option>
+              <option value="8710|Maintenance & repairs">Maintenance & repairs (Line 8710)</option>
+              <option value="8871|Office expenses">Office expenses (Line 8871)</option>
+              <option value="9180|Utilities (business portion)">Utilities (Line 9180)</option>
+              <option value="9200|Property taxes (business portion)">Property taxes (Line 9200)</option>
+              <option value="9220|Mortgage interest (business portion)">Mortgage interest (Line 9220)</option>
+              <option value="9220|Rent (business portion)">Rent (Line 9220)</option>
+              <option value="9270|Other business expenses">Other business expenses (Line 9270)</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>Line Items Breakdown</h2>
+          <div id="line-items-container">
+            </div>
+          <button type="button" class="btn btn-secondary" id="btn-add-item" style="margin-top:8px;">+ Add Item</button>
+          
+          <div class="running-subtotal">
+            Deductible Subtotal: $<span id="calculated-subtotal">0.00</span>
+          </div>
+        </div>
+
+        <button type="button" class="btn" id="btn-save-receipt" style="margin-bottom:20px;">Save Receipt Structure</button>
+      </div>
+
+      <div id="view-receipts" class="view">
+        <h2 style="margin-bottom:12px;">Saved Expense Records</h2>
+        <div id="receipts-list-container">
+          </div>
+      </div>
+
+      <div id="view-tax" class="view">
+        <div class="card">
+          <h2>Business-Use-of-Home (Annual)</h2>
+          <p style="font-size:0.75rem; color:var(--text-secondary); margin-bottom:12px;">
+            Enter total home expenses. The application handles pro-rating based on your space allocation matrix automatically.
+          </p>
+          <div class="form-group">
+            <label>Space/Time Allocation Percentage (%)</label>
+            <input type="number" id="home-pct" placeholder="e.g., 25" min="0" max="100" step="0.1">
+          </div>
+          <div class="form-group">
+            <label>Total Annual Rent ($)</label>
+            <input type="number" id="home-rent" placeholder="0.00" min="0" step="0.01">
+          </div>
+          <div class="form-group">
+            <label>Total Mortgage Interest ($)</label>
+            <input type="number" id="home-mortgage" placeholder="0.00" min="0" step="0.01">
+          </div>
+          <div class="form-group">
+            <label>Total Home Utilities ($)</label>
+            <input type="number" id="home-utilities" placeholder="0.00" min="0" step="0.01">
+          </div>
+          <div class="form-group">
+            <label>Total Property Taxes ($)</label>
+            <input type="number" id="home-tax" placeholder="0.00" min="0" step="0.01">
+          </div>
+          <div class="form-group">
+            <label>Total Maintenance & Repairs ($)</label>
+            <input type="number" id="home-repairs" placeholder="0.00" min="0" step="0.01">
+          </div>
+          <button type="button" class="btn btn-secondary" id="btn-save-home">Save & Recalculate Matrix</button>
+        </div>
+
+        <div class="card" style="padding:10px;">
+          <h2>T2125 Line Matrix Calculation</h2>
+          <table class="tax-table" id="tax-calculation-matrix">
+            <thead>
+              <tr>
+                <th>CRA Line</th>
+                <th>Description</th>
+                <th>Total ($)</th>
+              </tr>
+            </thead>
+            <tbody>
+              </tbody>
+          </table>
+          <button type="button" class="btn" id="btn-export-pdf" style="margin-top:15px;">Export T2125 Summary PDF</button>
+        </div>
+      </div>
+
+      <div id="view-settings" class="view">
+        <div class="card">
+          <h2>Account Configuration</h2>
+          <p style="margin-bottom:8px; font-size:0.9rem;">Logged in as: <span id="user-display-email" style="font-weight:bold;">...</span></p>
+          <button type="button" class="btn btn-danger" id="btn-signout">Sign Out</button>
+        </div>
+        <div class="card">
+          <h2>CRA T2125 Reference Instructions</h2>
+          <p style="font-size:0.85rem; line-height:1.4; color:var(--text-secondary);">
+            This client application compiles individual expenses and claims while tracking items flagged as "Exempt". 
+            Business use of home values are aggregated and added dynamically into lines 9220, 9180, 9200, and 8710 inside the computational summaries view.
+          </p>
+        </div>
+      </div>
+
+    </div>
+
+    <nav class="bottom-nav" id="app-nav" style="display:none;">
+      <div class="nav-item active" data-target="view-scan">
+        <svg viewBox="0 0 24 24"><path d="M9 2L7.17 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2h-3.17L15 2H9zm3 15c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5z"/></svg>
+        Scan
+      </div>
+      <div class="nav-item" data-target="view-receipts">
+        <svg viewBox="0 0 24 24"><path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/></svg>
+        Receipts
+      </div>
+      <div class="nav-item" data-target="view-tax">
+        <svg viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-1 14H6v-2h12v2zm0-4H6v-2h12v2zm0-4H6V7h12v2z"/></svg>
+        Tax
+      </div>
+      <div class="nav-item" data-target="view-settings">
+        <svg viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
+        Settings
+      </div>
+    </nav>
+
+  </div>
+
+  <div class="loader-overlay" id="loading-spinner">
+    <div style="text-align: center;">
+      <div class="spinner"></div>
+      <div id="spinner-text">Processing Engine...</div>
+    </div>
+  </div>
+
+  <script type="module">
+    import { initializeApp } from "firebase/app";
+    import { 
+      getAuth, onAuthStateChanged, signInWithEmailAndPassword, 
+      createUserWithEmailAndPassword, signOut 
+    } from "firebase/auth";
+    import { 
+      getFirestore, doc, setDoc, getDoc, collection, addDoc, getDocs 
+    } from "firebase/firestore";
+    import { 
+      getStorage, ref, uploadBytes, getDownloadURL 
+    } from "firebase/storage";
+
+    // Standardized Config Variable Blocks
+    const firebaseConfig = {
+      apiKey: "AIzaSyA2cWoeS_7fqu6Efvyns81-HFOfxBSlSBE",
+      authDomain: "tax-filling-app.firebaseapp.com",
+      projectId: "tax-filling-app",
+      storageBucket: "tax-filling-app.firebasestorage.app",
+      messagingSenderId: "955905005135",
+      appId: "1:955905005135:web:164f865d4441285d0b7c3a",
+      measurementId: "G-0LRKFHGD4Z"
+    };
+
+    // Global Initialization Instances
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+    const storage = getStorage(app);
+
+    let currentUser = null;
+    let globalReceiptsCache = [];
+
+    // T2125 Data Matrix Declarations
+    const t2125LinesDefinition = {
+      "8521": "Advertising",
+      "8523": "Groceries, Kitchen & Supplies",
+      "8690": "Insurance",
+      "8710": "Maintenance & Repairs",
+      "8871": "Office Expenses",
+      "9180": "Utilities (Business Portion)",
+      "9200": "Property Taxes (Business Portion)",
+      "9220": "Rent & Mortgage Interest (Business Portion)",
+      "9270": "Other Business Expenses"
+    };
+
+    // Inline PWA manifest creation
+    const manifestBlob = new Blob([JSON.stringify({
+      short_name: "DaycareTax",
+      name: "Daycare Owner Tax PWA",
+      start_url: window.location.href,
+      background_color: "#4CAF50",
+      theme_color: "#4CAF50",
+      display: "standalone",
+      orientation: "portrait"
+    })], { type: 'application/json' });
+    document.getElementById('manifest-placeholder').setAttribute('href', URL.createObjectURL(manifestBlob));
+
+    // Basic Service Worker Fallback Initialization
+    if ('serviceWorker' in navigator) {
+      const swCode = `
+        const CACHE_NAME = 'daycare-tax-v1';
+        self.addEventListener('install', e => self.skipWaiting());
+        self.addEventListener('fetch', e => { e.respondWith(fetch(e.request).catch(() => caches.match(e.request))); });
+      `;
+      const swBlob = new Blob([swCode], { type: 'application/javascript' });
+      navigator.serviceWorker.register(URL.createObjectURL(swBlob)).catch(() => {});
+    }
+
+    // Loader Helper Dom Interactors
+    const loading = {
+      show: (txt = "Processing...") => {
+        document.getElementById('spinner-text').innerText = txt;
+        document.getElementById('loading-spinner').style.display = 'flex';
+      },
+      hide: () => { document.getElementById('loading-spinner').style.display = 'none'; }
+    };
+
+    // Global View Coordinator Routing Matrix
+    function switchView(targetViewId) {
+      document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+      document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+      
+      const targetView = document.getElementById(targetViewId);
+      if(targetView) targetView.classList.add('active');
+      
+      const matchingNavItem = document.querySelector(`[data-target="${targetViewId}"]`);
+      if(matchingNavItem) matchingNavItem.classList.add('active');
+
+      // Intercept hooks for calculation loading metrics
+      if(targetViewId === 'view-receipts') fetchReceiptsPipeline();
+      if(targetViewId === 'view-tax') compileTaxCalculationsMatrix();
+    }
+
+    document.querySelectorAll('.nav-item').forEach(item => {
+      item.addEventListener('click', () => switchView(item.dataset.target));
+    });
+
+    // ================= SECURITY & AUTH OPERATIONS =================
+    const authForm = document.getElementById('auth-form');
+    const authTitle = document.getElementById('auth-title');
+    const authBtn = document.getElementById('auth-btn');
+    const authToggle = document.getElementById('auth-toggle');
+    let isLoginState = true;
+
+    authToggle.addEventListener('click', () => {
+      isLoginState = !isLoginState;
+      authTitle.innerText = isLoginState ? "Daycare Owner Login" : "Create Business Account";
+      authBtn.innerText = isLoginState ? "Sign In" : "Register Account";
+      authToggle.innerText = isLoginState ? "New here? Create an account" : "Have an account? Log in here";
+    });
+
+    authForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const email = document.getElementById('auth-email').value.trim();
+      const password = document.getElementById('auth-password').value;
+      loading.show(isLoginState ? "Authenticating..." : "Creating Account...");
+
+      try {
+        if(isLoginState) {
+          await signInWithEmailAndPassword(auth, email, password);
+        } else {
+          await createUserWithEmailAndPassword(auth, email, password);
+        }
+        authForm.reset();
+      } catch (error) {
+        alert(`Authentication Error Encountered: ${error.message}`);
+      } finally {
+        loading.hide();
+      }
+    });
+
+    document.getElementById('btn-signout').addEventListener('click', async () => {
+      if(confirm("Are you sure you want to log out?")) {
+        loading.show("Logging out...");
+        await signOut(auth);
+        loading.hide();
+      }
+    });
+
+    onAuthStateChanged(auth, (user) => {
+      if(user) {
+        currentUser = user;
+        document.getElementById('user-display-email').innerText = user.email;
+        document.getElementById('app-nav').style.display = 'flex';
+        resetScanFormState();
+        switchView('view-scan');
+        loadHomeSettingsData();
+      } else {
+        currentUser = null;
+        document.getElementById('app-nav').style.display = 'none';
+        switchView('view-auth');
+      }
+    });
+
+    // ================= ITEMIZATION ENTRY INTERACTION =================
+    const itemsContainer = document.getElementById('line-items-container');
+    
+    function createItemRowElement(name = "", amount = "", isExempt = false) {
+      const rowId = 'row_' + Math.random().toString(36).substr(2, 9);
+      const div = document.createElement('div');
+      div.className = `item-row ${isExempt ? 'exempt' : ''}`;
+      div.id = rowId;
+      
+      div.innerHTML = `
+        <div class="item-grid-top">
+          <input type="text" class="item-name" placeholder="Item/Description" value="${name}" required>
+          <input type="number" class="item-amount" placeholder="0.00" step="0.01" min="0" value="${amount}" required>
+        </div>
+        <div class="item-grid-bottom">
+          <button type="button" class="toggle-badge ${isExempt ? 'badge-exempt' : 'badge-include'}">
+            ${isExempt ? 'Exempt (Non-Deductible)' : 'Deductible'}
+          </button>
+          <button type="button" class="toggle-badge badge-exempt btn-row-delete" style="color:var(--danger)">Delete</button>
+        </div>
+      `;
+
+      // Event Hookups for instant math evaluation changes
+      const amtInput = div.querySelector('.item-amount');
+      amtInput.addEventListener('input', runRealtimeMathSubtotals);
+
+      const toggleBtn = div.querySelector('.toggle-badge');
+      toggleBtn.addEventListener('click', () => {
+        const row = document.getElementById(rowId);
+        if(row.classList.contains('exempt')) {
+          row.classList.remove('exempt');
+          toggleBtn.className = "toggle-badge badge-include";
+          toggleBtn.innerText = "Deductible";
+        } else {
+          row.classList.add('exempt');
+          toggleBtn.className = "toggle-badge badge-exempt";
+          toggleBtn.innerText = "Exempt (Non-Deductible)";
+        }
+        runRealtimeMathSubtotals();
+      });
+
+      div.querySelector('.btn-row-delete').addEventListener('click', () => {
+        div.remove();
+        runRealtimeMathSubtotals();
+      });
+
+      itemsContainer.appendChild(div);
+    }
+
+    document.getElementById('btn-add-item').addEventListener('click', () => createItemRowElement());
+
+    function runRealtimeMathSubtotals() {
+      let subtotal = 0;
+      document.querySelectorAll('.item-row').forEach(row => {
+        if(!row.classList.contains('exempt')) {
+          const amt = parseFloat(row.querySelector('.item-amount').value) || 0;
+          subtotal += amt;
+        }
+      });
+      document.getElementById('calculated-subtotal').innerText = subtotal.toFixed(2);
+    }
+
+    // Image Input Handling
+    const fileInput = document.getElementById('receipt-file');
+    fileInput.addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if(file) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+          document.getElementById('receipt-preview').src = e.target.result;
+          document.getElementById('preview-container').style.display = 'block';
+        }
+        reader.readAsDataURL(file);
+      }
+    });
+
+    function resetScanFormState() {
+      document.getElementById('receipt-vendor').value = "";
+      document.getElementById('receipt-date').value = new Date().toISOString().split('T')[0];
+      document.getElementById('receipt-category').selectedIndex = 0;
+      fileInput.value = "";
+      document.getElementById('preview-container').style.display = 'none';
+      itemsContainer.innerHTML = "";
+      createItemRowElement(); // Prime with single starting blank entry row
+      runRealtimeMathSubtotals();
+    }
+
+    // ================= STORAGE AND DOCUMENT INTEGRATION =================
+    document.getElementById('btn-save-receipt').addEventListener('click', async () => {
+      if(!currentUser) return;
+      
+      const vendor = document.getElementById('receipt-vendor').value.trim();
+      const dateString = document.getElementById('receipt-date').value;
+      const categoryRaw = document.getElementById('receipt-category').value;
+      
+      if(!vendor || !dateString) {
+        alert("Please specify both a Vendor and a Transaction Date.");
+        return;
+      }
+
+      const rows = document.querySelectorAll('.item-row');
+      if(rows.length === 0) {
+        alert("Please add at least one transaction line item.");
+        return;
+      }
+
+      loading.show("Saving Cloud Artifacts...");
+      
+      try {
+        let imageUrl = null;
+        const targetImageFile = fileInput.files[0];
+        
+        if(targetImageFile) {
+          const uniqueId = Date.now() + "_" + targetImageFile.name;
+          const storageRefPath = ref(storage, `receipts/${currentUser.uid}/${uniqueId}`);
+          const snapshot = await uploadBytes(storageRefPath, targetImageFile);
+          imageUrl = await getDownloadURL(snapshot.ref);
+        }
+
+        // Process dynamic row matrix sets
+        const itemsArray = [];
+        let totalSum = 0;
+        let taxableSum = 0;
+
+        rows.forEach(r => {
+          const name = r.querySelector('.item-name').value.trim() || "Item";
+          const amount = parseFloat(r.querySelector('.item-amount').value) || 0;
+          const isExempt = r.classList.contains('exempt');
+
+          totalSum += amount;
+          if(!isExempt) taxableSum += amount;
+
+          itemsArray.push({ name, amount, exempt: isExempt });
+        });
+
+        const [lineNumber, categoryLabel] = categoryRaw.split('|');
+
+        const docPayload = {
+          uid: currentUser.uid,
+          vendor,
+          date: dateString,
+          lineNumber,
+          categoryLabel,
+          items: itemsArray,
+          totalAmount: totalSum,
+          taxableAmount: taxableSum,
+          imageUrl,
+          timestamp: Date.now()
+        };
+
+        await addDoc(collection(db, "receipts"), docPayload);
+        alert("Expense entry successfully cataloged!");
+        resetScanFormState();
+        switchView('view-receipts');
+      } catch (err) {
+        alert(`Storage Process Failure: ${err.message}`);
+      } finally {
+        loading.hide();
+      }
+    });
+
+    // ================= RECEIPTS PIPELINE SYNC ENGINE =================
+    async function fetchReceiptsPipeline() {
+      if(!currentUser) return;
+      const targetContainer = document.getElementById('receipts-list-container');
+      targetContainer.innerHTML = `<div style="text-align:center; padding:20px; color:var(--text-secondary)">Loading ledger files...</div>`;
+
+      try {
+        const querySnapshot = await getDocs(collection(db, "receipts"));
+        const localList = [];
+        
+        querySnapshot.forEach(doc => {
+          const data = doc.data();
+          if(data.uid === currentUser.uid) {
+            localList.push(data);
+          }
+        });
+
+        // Perform memory-safe date descending sort configuration sorting arrays natively
+        localList.sort((a,b) => new Date(b.date) - new Date(a.date));
+        globalReceiptsCache = localList; // Store references dynamically for calculation logic reuse
+
+        if(localList.length === 0) {
+          targetContainer.innerHTML = `<div style="text-align:center; padding:20px; color:var(--text-secondary)">No receipts logged yet.</div>`;
+          return;
+        }
+
+        targetContainer.innerHTML = "";
+        localList.forEach(rec => {
+          const itemNamesSummary = rec.items
+            .filter(i => !i.exempt)
+            .map(i => i.name)
+            .join(', ');
+
+          const wrapper = document.createElement('div');
+          wrapper.className = "receipt-item card";
+          wrapper.innerHTML = `
+            <img class="receipt-thumb" src="${rec.imageUrl || 'data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' fill=\'%23BDBDBD\' viewBox=\'0 0 24 24\'><path d=\'M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 5H5l3.5-4.5z\'/></svg>'}" alt="Thumb">
+            <div class="receipt-details">
+              <div class="receipt-vendor">${escapeHtml(rec.vendor)}</div>
+              <div class="receipt-meta">${rec.date} • Line ${rec.lineNumber}</div>
+              <div class="receipt-items-list">${escapeHtml(itemNamesSummary || 'No non-exempt elements')}</div>
+            </div>
+            <div class="receipt-amount">$${rec.taxableAmount.toFixed(2)}</div>
+          `;
+          targetContainer.appendChild(wrapper);
+        });
+      } catch (err) {
+        targetContainer.innerHTML = `<div style="color:var(--danger)">Error synchronizing historical documents: ${err.message}</div>`;
+      }
+    }
+
+    function escapeHtml(string) {
+      return String(string).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    // ================= BUSINESS HOME CALCULATOR LOGIC MATRIX =================
+    document.getElementById('btn-save-home').addEventListener('click', async () => {
+      if(!currentUser) return;
+      loading.show("Saving Configuration States...");
+      
+      const payload = {
+        pct: parseFloat(document.getElementById('home-pct').value) || 0,
+        rent: parseFloat(document.getElementById('home-rent').value) || 0,
+        mortgage: parseFloat(document.getElementById('home-mortgage').value) || 0,
+        utilities: parseFloat(document.getElementById('home-utilities').value) || 0,
+        tax: parseFloat(document.getElementById('home-tax').value) || 0,
+        repairs: parseFloat(document.getElementById('home-repairs').value) || 0
+      };
+
+      try {
+        await setDoc(doc(db, "homeSettings", currentUser.uid), payload);
+        alert("Home Allocation Matrix Confirmed.");
+        compileTaxCalculationsMatrix();
+      } catch (err) {
+        alert(`Configuration write crash: ${err.message}`);
+      } finally {
+        loading.hide();
+      }
+    });
+
+    async function loadHomeSettingsData() {
+      if(!currentUser) return;
+      try {
+        const docSnap = await getDoc(doc(db, "homeSettings", currentUser.uid));
+        if(docSnap.exists()) {
+          const data = docSnap.data();
+          document.getElementById('home-pct').value = data.pct || "";
+          document.getElementById('home-rent').value = data.rent || "";
+          document.getElementById('home-mortgage').value = data.mortgage || "";
+          document.getElementById('home-utilities').value = data.utilities || "";
+          document.getElementById('home-tax').value = data.tax || "";
+          document.getElementById('home-repairs').value = data.repairs || "";
+        }
+      } catch (err) {
+        console.error("Non-critical lookup fault loading setting schemas", err);
+      }
+    }
+
+    let dynamicOutputMatrixInstance = {}; // Shared context reference storage engine
+
+    function compileTaxCalculationsMatrix() {
+      // 1. Reset matrix configurations dictionary fields
+      dynamicOutputMatrixInstance = {};
+      Object.keys(t2125LinesDefinition).forEach(line => {
+        dynamicOutputMatrixInstance[line] = { baseReceiptsSum: 0, homeProratedAddition: 0, aggregateTotal: 0 };
+      });
+
+      // 2. Tabulate all transaction sums mapping directly by line target identifiers
+      globalReceiptsCache.forEach(receipt => {
+        if(dynamicOutputMatrixInstance[receipt.lineNumber] !== undefined) {
+          dynamicOutputMatrixInstance[receipt.lineNumber].baseReceiptsSum += (receipt.taxableAmount || 0);
+        }
+      });
+
+      // 3. Extract and multiply space allocations allocations percentage values 
+      const allocationPct = (parseFloat(document.getElementById('home-pct').value) || 0) / 100;
+      
+      const homeRent = (parseFloat(document.getElementById('home-rent').value) || 0) * allocationPct;
+      const homeMortgage = (parseFloat(document.getElementById('home-mortgage').value) || 0) * allocationPct;
+      const homeUtils = (parseFloat(document.getElementById('home-utilities').value) || 0) * allocationPct;
+      const homeTax = (parseFloat(document.getElementById('home-tax').value) || 0) * allocationPct;
+      const homeRepairs = (parseFloat(document.getElementById('home-repairs').value) || 0) * allocationPct;
+
+      // 4. Inject specific distribution rulesets directly mapped to correct T2125 targets
+      dynamicOutputMatrixInstance["9220"].homeProratedAddition += (homeRent + homeMortgage);
+      dynamicOutputMatrixInstance["9180"].homeProratedAddition += homeUtils;
+      dynamicOutputMatrixInstance["9200"].homeProratedAddition += homeTax;
+      dynamicOutputMatrixInstance["8710"].homeProratedAddition += homeRepairs;
+
+      // 5. Finalize data assembly loops writing totals out to individual DOM components
+      const tbody = document.querySelector('#tax-calculation-matrix tbody');
+      tbody.innerHTML = "";
+      
+      let finalGrandDeductionAccumulator = 0;
+
+      Object.keys(dynamicOutputMatrixInstance).forEach(lineCode => {
+        const rowData = dynamicOutputMatrixInstance[lineCode];
+        rowData.aggregateTotal = rowData.baseReceiptsSum + rowData.homeProratedAddition;
+        finalGrandDeductionAccumulator += rowData.aggregateTotal;
+
+        if (rowData.aggregateTotal > 0 || rowData.baseReceiptsSum > 0 || rowData.homeProratedAddition > 0) {
+          const row = document.createElement('tr');
+          row.innerHTML = `
+            <td><strong>${lineCode}</strong></td>
+            <td>${t2125LinesDefinition[lineCode]}</td>
+            <td><strong>$${rowData.aggregateTotal.toFixed(2)}</strong></td>
+          `;
+          tbody.appendChild(row);
+        }
+      });
+
+      // Append absolute aggregated layout metric row to user interface table matrix
+      const grandTotalRow = document.createElement('tr');
+      grandTotalRow.className = "total-row";
+      grandTotalRow.innerHTML = `
+        <td>Total</td>
+        <td>Aggregated Deductible Claims</td>
+        <td>$${finalGrandDeductionAccumulator.toFixed(2)}</td>
+      `;
+      tbody.appendChild(grandTotalRow);
+    }
+
+    // ================= EXPORT SYSTEM STATEMENT ENGINE =================
+    document.getElementById('btn-export-pdf').addEventListener('click', () => {
+      try {
+        const { jsPDF } = window.jspdf;
+        const pdf = new jsPDF();
+        let cursorY = 20;
+
+        // Print header structures branding metrics
+        pdf.setFont("helvetica", "bold");
+        pdf.setFontSize(18);
+        pdf.setTextColor(76, 175, 80); // #4CAF50
+        pdf.text("CRA Form T2125 Tax Statement Summary", 14, cursorY);
+        
+        cursorY += 10;
+        pdf.setFont("helvetica", "normal");
+        pdf.setFontSize(10);
+        pdf.setTextColor(33, 33, 33);
+        pdf.text(`Daycare Operator Profile Email: ${currentUser ? currentUser.email : 'N/A'}`, 14, cursorY);
+        cursorY += 6;
+        pdf.text(`Statement Generated Timestamp: ${new Date().toLocaleString()}`, 14, cursorY);
+        cursorY += 14;
+
+        // Draw structural grid tables
+        pdf.setFont("helvetica", "bold");
+        pdf.setFillColor(76, 175, 80);
+        pdf.rect(14, cursorY, 182, 8, "F");
+        pdf.setTextColor(255, 255, 255);
+        pdf.text("CRA Line", 16, cursorY + 6);
+        pdf.text("Expense Category Description Mapping", 45, cursorY + 6);
+        pdf.text("Deductible Total", 160, cursorY + 6);
+        
+        cursorY += 8;
+        pdf.setFont("helvetica", "normal");
+        pdf.setTextColor(33, 33, 33);
+
+        let calculatedSum = 0;
+
+        Object.keys(dynamicOutputMatrixInstance).forEach(line => {
+          const metric = dynamicOutputMatrixInstance[line];
+          calculatedSum += metric.aggregateTotal;
+
+          // Only render text streams tracking active numeric properties balances
+          if(metric.aggregateTotal > 0) {
+            // Horizontal border lines
+            pdf.setDrawColor(224, 224, 224);
+            pdf.line(14, cursorY + 8, 196, cursorY + 8);
+
+            pdf.setFont("helvetica", "bold");
+            pdf.text(line, 16, cursorY + 6);
+            pdf.setFont("helvetica", "normal");
+            pdf.text(t2125LinesDefinition[line], 45, cursorY + 6);
+            pdf.text(`$${metric.aggregateTotal.toFixed(2)}`, 160, cursorY + 6);
+            cursorY += 8;
+          }
+        });
+
+        // Add structural computational footers layout structures
+        cursorY += 6;
+        pdf.setFillColor(232, 245, 233); // #E8F5E9
+        pdf.rect(14, cursorY, 182, 10, "F");
+        pdf.setFont("helvetica", "bold");
+        pdf.text("Estimated T2125 Business Expenses Grand Total Sum:", 16, cursorY + 6);
+        pdf.text(`$${calculatedSum.toFixed(2)}`, 160, cursorY + 6);
+
+        // Save file down safely to execution parameters environment directly
+        pdf.save(`T2125-Daycare-Summary-${new Date().toISOString().split('T')[0]}.pdf`);
+      } catch (err) {
+        alert(`Failed to accurately convert canvas vectors to PDF schema: ${err.message}`);
+      }
+    });
+
+  </script>
+</body>
+</html>
